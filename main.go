@@ -97,9 +97,6 @@ func scrapeSearchPage(page int) []Article {
 
 			version := strings.TrimSpace(s1.Text())
 
-			if len(articles) > 6 {
-				return
-			}
 			articles = append(articles, scrapeArticlePage(Article{
 				Title:    title,
 				Version:  version,
