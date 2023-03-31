@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/bits"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,7 +21,7 @@ const (
 	csvFileName            = "results.csv"
 	csvFullResultsFileName = "results_full.csv"
 	logFileName            = "output.log"
-	UserAgent              = "Mozilla/5.0 (compatible; IPFS.ScraperBot/v1.0; +https://github.com/Neo-Desktop/winworldpc-ipfs-scraper)"
+	UserAgent              = "Mozilla/5.0 (compatible; IPFS.ScraperBot/v1.1; +https://github.com/Neo-Desktop/winworldpc-ipfs-scraper)"
 )
 
 type File struct {
@@ -57,7 +59,43 @@ type Article struct {
 	Files    []File
 }
 
-func scrapeSearchPage(page int) []Article {
+func scrapeSearchPageForUpperBound() uint {
+	urlA, err := url.Parse(URL + "/search")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Printf("Fetching search paginaion upper bound")
+
+	res, err := fetch(urlA.String())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		log.Fatalf("status code error: %d %s", res.StatusCode, res.Status)
+	}
+
+	doc, err := gq.NewDocumentFromReader(res.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	lastPage := doc.Find("#searchPagination>li").Last()
+	lastPageText := strings.TrimSpace(lastPage.Text())
+
+	out, err := strconv.ParseUint(lastPageText, 10, bits.UintSize)
+	if err != nil {
+		log.Fatalf("unable to parse search pagination upper bound")
+	}
+
+	log.Printf("====== Found %d total pages ======", out)
+
+	return uint(out)
+}
+
+func scrapeSearchPage(page uint) []Article {
 	log.Printf("=============================== PAGE %2d ===============================", page)
 	urlA, err := url.Parse(URL + "/search")
 	if err != nil {
@@ -65,6 +103,7 @@ func scrapeSearchPage(page int) []Article {
 	}
 
 	queryParameters := urlA.Query()
+	queryParameters.Add("sort", "most-recent")
 	queryParameters.Add("page", fmt.Sprintf("%d", page))
 	urlA.RawQuery = queryParameters.Encode()
 
@@ -253,7 +292,9 @@ func main() {
 
 	articles := make([]Article, 0)
 
-	for i := 1; i < 63; i++ {
+	pageUpperBound := scrapeSearchPageForUpperBound()
+
+	for i := uint(1); i < pageUpperBound; i++ {
 		results := scrapeSearchPage(i)
 		articles = append(articles, results...)
 		go writeCSV(results, csvFileName)

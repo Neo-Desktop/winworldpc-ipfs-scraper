@@ -1,5 +1,8 @@
 *.csv
 *.log
+.backups
+builds/
+winworldpc-ipfs-scraper
 
 ### NotepadPP template
 # Notepad++ backups #
